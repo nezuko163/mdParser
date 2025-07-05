@@ -1,7 +1,5 @@
 package com.nezuko
 
-// оооо
-
 class ParserMdImpl {
 
     fun asd(): List<Int> {
