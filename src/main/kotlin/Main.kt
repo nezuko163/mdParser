@@ -1,8 +1,5 @@
 package com.nezuko
 
-import java.util.LinkedList
-import java.util.Stack
-
 
 class ParserMdImpl {
 
