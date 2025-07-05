@@ -40,24 +40,29 @@ class MdParserTest {
         assertEquals("\nzxc asd\n", a)
     }
 
-        @Test
+    @Test
+    fun parseTestText() {
+
+    }
+
+    @Test
     fun formatTest__bold() {
-            var a = hashMapOf(
-                Pair("**", listOf(0, 5)),
-            )
-            var res = mdParser.formatText("**asd**", a)
-            log.info { res.toString() }
-            log.info { "italic - ${res.italicIndexes.map { it.contentToString() }}" }
-            log.info { "bold - ${res.boldIndexes.map { it.contentToString() }}" }
-            log.info { "crossed - ${res.crossedOutIndexes.map { it.contentToString() }}" }
-            var expected = MdBlock.MdText(
-                text = "asd",
-                italicIndexes = arrayListOf(),
-                boldIndexes = arrayListOf(intArrayOf(0, 3)),
-                crossedOutIndexes = arrayListOf(),
-                header = null
-            )
-            assertEquals(expected, res)
+        var a = hashMapOf(
+            Pair("**", listOf(0, 5)),
+        )
+        var res = mdParser.formatText("**asd**", a)
+        log.info { res.toString() }
+        log.info { "italic - ${res.italicIndexes.map { it.contentToString() }}" }
+        log.info { "bold - ${res.boldIndexes.map { it.contentToString() }}" }
+        log.info { "crossed - ${res.crossedOutIndexes.map { it.contentToString() }}" }
+        var expected = MdBlock.MdText(
+            text = "asd",
+            italicIndexes = arrayListOf(),
+            boldIndexes = arrayListOf(intArrayOf(0, 3)),
+            crossedOutIndexes = arrayListOf(),
+            header = null
+        )
+        assertEquals(expected, res)
     }
 
     @Test
@@ -118,7 +123,25 @@ class MdParserTest {
             header = null
         )
         assertEquals(expected, res)
-
+    }
+    @Test
+    fun formatTestCrossed__withOne() {
+        var a = hashMapOf(
+            Pair("~", listOf(0, 4)),
+        )
+        var res = mdParser.formatText("~asd~", a)
+        log.info { res.toString() }
+        log.info { "italic - ${res.italicIndexes.map { it.contentToString() }}" }
+        log.info { "bold - ${res.boldIndexes.map { it.contentToString() }}" }
+        log.info { "crossed - ${res.crossedOutIndexes.map { it.contentToString() }}" }
+        var expected = MdBlock.MdText(
+            text = "asd",
+            italicIndexes = arrayListOf(),
+            boldIndexes = arrayListOf(),
+            crossedOutIndexes = arrayListOf(intArrayOf(0, 3)),
+            header = null
+        )
+        assertEquals(expected, res)
     }
 
 
@@ -165,6 +188,49 @@ class MdParserTest {
             crossedOutIndexes = arrayListOf(intArrayOf(0, 4)),
             header = null
         )
+        assertEquals(expected, res)
+    }
+
+    @Test
+    fun parseTextTest_ItalicsBold() {
+        val a = "***asd***"
+        val res = mdParser.parseText(a)
+        val expected = MdBlock.MdText("asd", italicIndexes = arrayListOf(intArrayOf(0, 3)), boldIndexes = arrayListOf(intArrayOf(0, 3)))
+
+        assertEquals(expected, res)
+    }
+
+    @Test
+    fun parseTextTest_ItalicsBoldWithOtherWords() {
+        val a = "asd***asd***asd"
+        val res = mdParser.parseText(a)
+        val expected = MdBlock.MdText("asdasdasd", italicIndexes = arrayListOf(intArrayOf(3, 6)), boldIndexes = arrayListOf(intArrayOf(3, 6)))
+
+        assertEquals(expected, res)
+    }
+    @Test
+    fun parseTextTest_ItalicsBoldWithOtherWordsWithItalics() {
+        val a = "*asd****asd***asd"
+        val res = mdParser.parseText(a)
+        val expected = MdBlock.MdText("asdasdasd", italicIndexes = arrayListOf(intArrayOf(0, 3), intArrayOf(3, 6)), boldIndexes = arrayListOf(intArrayOf(3, 6)))
+
+        log.info { res.toString() }
+        log.info { "italic - ${res.italicIndexes.map { it.contentToString() }}" }
+        log.info { "bold - ${res.boldIndexes.map { it.contentToString() }}" }
+        log.info { "crossed - ${res.crossedOutIndexes.map { it.contentToString() }}" }
+        assertEquals(expected, res)
+    }
+
+    @Test
+    fun parseTextTest_StrangeeSituation() {
+        val a = "*a**a*"
+        val res = mdParser.parseText(a)
+        val expected = MdBlock.MdText("a**a", italicIndexes = arrayListOf(intArrayOf(0, 4)))
+
+        log.info { res.toString() }
+        log.info { "italic - ${res.italicIndexes.map { it.contentToString() }}" }
+        log.info { "bold - ${res.boldIndexes.map { it.contentToString() }}" }
+        log.info { "crossed - ${res.crossedOutIndexes.map { it.contentToString() }}" }
         assertEquals(expected, res)
     }
 }

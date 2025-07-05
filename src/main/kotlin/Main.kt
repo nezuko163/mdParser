@@ -118,80 +118,90 @@ class ParserMdImpl {
     }
 
     fun parseText(text: String): MdBlock.MdText {
+        val symbols = linkedMapOf<String, MutableList<Int>>()
+        val markers = listOf("~~~", "***", "~~", "**", "*", "~")
         var i = 0
-
-
-
-        return MdBlock.MdText("")
+        while (i < text.length) {
+            var matched = false
+            for (marker in markers) {
+                if (text.startsWith(marker, i)) {
+                    symbols.getOrPut(marker) { mutableListOf() }.add(i)
+                    i += marker.length
+                    matched = true
+                    break
+                }
+            }
+            if (!matched) {
+                i++
+            }
+        }
+        val symbolMap: Map<String, List<Int>> = symbols.mapValues { it.value.sorted() }
+        return formatText(text, symbolMap)
     }
 
     fun formatText(
         text: String,
         symbols: Map<String, List<Int>>
     ): MdBlock.MdText {
-        // Собираем оригинальные диапазоны для стилей
         val italicRanges = mutableListOf<IntArray>()
         val boldRanges = mutableListOf<IntArray>()
         val strikeRanges = mutableListOf<IntArray>()
 
         for ((sym, positions) in symbols) {
-            if (positions.size % 2 != 0) continue // непарное число маркеров
-            for (i in positions.indices step 2) {
-                val open = positions[i]
-                val close = positions[i + 1]
+            if (positions.size % 2 != 0) continue
+            for (j in positions.indices step 2) {
+                val open = positions[j]
+                val close = positions[j + 1]
                 when (sym) {
-                    "***" -> {
-                        // жирный+курсив
-                        italicRanges.add(intArrayOf(open + sym.length, close))
-                        boldRanges.add(intArrayOf(open + sym.length, close))
+                    "***", "~~~" -> {
+                        italicRanges += intArrayOf(open + sym.length, close)
+                        boldRanges += intArrayOf(open + sym.length, close)
                     }
                     "**" -> {
-                        boldRanges.add(intArrayOf(open + sym.length, close))
+                        boldRanges += intArrayOf(open + sym.length, close)
                     }
                     "*" -> {
-                        italicRanges.add(intArrayOf(open + sym.length, close))
+                        italicRanges += intArrayOf(open + sym.length, close)
                     }
                     "~~" -> {
-                        strikeRanges.add(intArrayOf(open + sym.length, close))
+                        strikeRanges += intArrayOf(open + sym.length, close)
+                    }
+                    "~" -> {
+                        strikeRanges += intArrayOf(open + sym.length, close)
                     }
                 }
             }
         }
 
-        // Помечаем позиции маркеров для удаления
         val toRemove = BooleanArray(text.length)
         for ((sym, positions) in symbols) {
             if (positions.size % 2 != 0) continue
-            for (i in positions.indices step 2) {
-                val open = positions[i]
-                val close = positions[i + 1]
-                for (j in open until open + sym.length) toRemove[j] = true
-                for (j in close until close + sym.length) toRemove[j] = true
+            for (j in positions.indices step 2) {
+                val open = positions[j]
+                val close = positions[j + 1]
+                for (k in open until open + sym.length) toRemove[k] = true
+                for (k in close until close + sym.length) toRemove[k] = true
             }
         }
 
-        // Строим новый текст без маркеров и карту старых->новых индексов
         val sb = StringBuilder()
         val origToNew = IntArray(text.length)
         var newIdx = 0
-        for (i in text.indices) {
-            origToNew[i] = newIdx
-            if (!toRemove[i]) {
-                sb.append(text[i])
+        for (idx in text.indices) {
+            origToNew[idx] = newIdx
+            if (!toRemove[idx]) {
+                sb.append(text[idx])
                 newIdx++
             }
         }
 
-        // Функция для преобразования оригинальных диапазонов в новые
-        fun toNewRange(origStart: Int, origEnd: Int): IntArray {
-            val start = origToNew[origStart]
-            val end = origToNew[origEnd]
-            return intArrayOf(start, end)
+        fun toNew(orig: Int, end: Int): IntArray {
+            return intArrayOf(origToNew[orig], origToNew[end])
         }
 
-        val italicFinal = italicRanges.map { toNewRange(it[0], it[1]) }
-        val boldFinal = boldRanges.map { toNewRange(it[0], it[1]) }
-        val strikeFinal = strikeRanges.map { toNewRange(it[0], it[1]) }
+        val italicFinal = italicRanges.map { toNew(it[0], it[1]) }
+        val boldFinal = boldRanges.map { toNew(it[0], it[1]) }
+        val strikeFinal = strikeRanges.map { toNew(it[0], it[1]) }
 
         return MdBlock.MdText(
             text = sb.toString(),
@@ -204,19 +214,20 @@ class ParserMdImpl {
 
 
 
-//    fun parseHeader(line: String): MdBlock.MdText {
-//        for (level in 0..5) {
-//            if (level >= line.length) return MdBlock.MdText("", header = Header.from(level + 1))
-//            if (line[level] != '#') {
-//                return parseText("").also {
-//                    it.header = Header.from(level)
-//                }
-//            }
-//        }
-//        return parseText("").also {
-//            it.header = Header.from(6)
-//        }
-//    }
+
+    fun parseHeader(line: String): MdBlock.MdText {
+        for (level in 0..5) {
+            if (level >= line.length) return MdBlock.MdText("", header = Header.from(level + 1))
+            if (line[level] != '#') {
+                return parseText("").also {
+                    it.header = Header.from(level)
+                }
+            }
+        }
+        return parseText("").also {
+            it.header = Header.from(6)
+        }
+    }
 
     fun cleanSpaces(text: String): String {
         return text
