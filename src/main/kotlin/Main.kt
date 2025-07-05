@@ -1,5 +1,7 @@
 package com.nezuko
 
+import java.util.LinkedList
+import java.util.Stack
 
 
 class ParserMdImpl {
@@ -115,170 +117,87 @@ class ParserMdImpl {
         return MdBlock.MdText(line.substring(i, line.length))
     }
 
-    fun parseText(text: String): List<MdBlock.MdText> {
-        val phrase = StringBuilder()
-
-        val symbols = ArrayDeque<Pair<Int, String>>()
-        var startPhrase = -1
-        val res = arrayListOf<MdBlock.MdText>()
-        var starCount = 0
-
-        if (text[0] == '*') {
-            startPhrase = 0
-            starCount++
-        } else if (text[0] == '~') {
-            startPhrase = 0
-            symbols.add(Pair(0, "~"))
-        } else {
-            phrase.append(text)
-        }
-
-        var i = 1
-
-        while (i < text.length) {
-            val c = text[i]
-            if (c == '*') {
-                starCount++
-                if (startPhrase == -1) {
-                    startPhrase = i
-                }
-                if (starCount == 3) {
-                    symbols.add(Pair(i - 2, "***"))
-                    starCount = 0
-                }
-
-            } else if (c == '~') {
-                if (starCount != 0) {
-                    symbols.add(Pair(i - starCount - 1, "*".repeat(starCount)))
-                    starCount = 0
-                }
-                if (startPhrase == -1) {
-                    startPhrase = i
-                }
-                symbols.add(Pair(i, "~"))
-            } else {
-                if (starCount != 0) {
-                    symbols.add(Pair(i - starCount - 1, "*".repeat(starCount)))
-                    starCount = 0
-                }
-                if (startPhrase != -1 && (text[i - 1] == '*' || text[i - 1] == '~')) {
-                    res.add(formatText(phrase.toString(), symbols))
-                    startPhrase = -1
-                }
-            }
-            i++
-            phrase.append(c)
-
-        }
-        return res
+    fun parseText(): List<MdBlock.MdText> {
+        return emptyList()
     }
 
     fun formatText(
         text: String,
-        symbols: ArrayDeque<Pair<Int, String>>,
+        symbols: Map<String, List<Int>>
     ): MdBlock.MdText {
-        println(text)
-        println(symbols)
-        var left = 0
-        var right = symbols.size - 1
+        // Собираем оригинальные диапазоны для стилей
+        val italicRanges = mutableListOf<IntArray>()
+        val boldRanges = mutableListOf<IntArray>()
+        val strikeRanges = mutableListOf<IntArray>()
 
-        var italic = false
-        var bold = false
-        var crossedOut = false
-        var start = 0
-        var end = right
-        while (left < right) {
-            val (leftPos, lSymb) = symbols.removeFirst()
-            val (rightPos, rSymb) = symbols.removeLast()
-            if (lSymb == rSymb) {
-                when (lSymb) {
+        for ((sym, positions) in symbols) {
+            if (positions.size % 2 != 0) continue // непарное число маркеров
+            for (i in positions.indices step 2) {
+                val open = positions[i]
+                val close = positions[i + 1]
+                when (sym) {
                     "***" -> {
-                        italic = true
-                        bold = true
+                        // жирный+курсив
+                        italicRanges.add(intArrayOf(open + sym.length, close))
+                        boldRanges.add(intArrayOf(open + sym.length, close))
                     }
-                    "**" -> bold = true
-                    "*" -> italic = true
-                    "~" -> crossedOut = true
+                    "**" -> {
+                        boldRanges.add(intArrayOf(open + sym.length, close))
+                    }
+                    "*" -> {
+                        italicRanges.add(intArrayOf(open + sym.length, close))
+                    }
+                    "~~" -> {
+                        strikeRanges.add(intArrayOf(open + sym.length, close))
+                    }
                 }
-                start = leftPos + lSymb.length
-                end = rightPos
-                left++
-                right--
-            } else {
-                right--
             }
-            println("start = $start; end = $end")
         }
+
+        // Помечаем позиции маркеров для удаления
+        val toRemove = BooleanArray(text.length)
+        for ((sym, positions) in symbols) {
+            if (positions.size % 2 != 0) continue
+            for (i in positions.indices step 2) {
+                val open = positions[i]
+                val close = positions[i + 1]
+                for (j in open until open + sym.length) toRemove[j] = true
+                for (j in close until close + sym.length) toRemove[j] = true
+            }
+        }
+
+        // Строим новый текст без маркеров и карту старых->новых индексов
+        val sb = StringBuilder()
+        val origToNew = IntArray(text.length)
+        var newIdx = 0
+        for (i in text.indices) {
+            origToNew[i] = newIdx
+            if (!toRemove[i]) {
+                sb.append(text[i])
+                newIdx++
+            }
+        }
+
+        // Функция для преобразования оригинальных диапазонов в новые
+        fun toNewRange(origStart: Int, origEnd: Int): IntArray {
+            val start = origToNew[origStart]
+            val end = origToNew[origEnd]
+            return intArrayOf(start, end)
+        }
+
+        val italicFinal = italicRanges.map { toNewRange(it[0], it[1]) }
+        val boldFinal = boldRanges.map { toNewRange(it[0], it[1]) }
+        val strikeFinal = strikeRanges.map { toNewRange(it[0], it[1]) }
+
         return MdBlock.MdText(
-            text = text.substring(start, end),
-            italic = italic,
-            bold = bold,
-            crossedOut = crossedOut,
+            text = sb.toString(),
+            italicIndexes = italicFinal,
+            boldIndexes = boldFinal,
+            crossedOutIndexes = strikeFinal,
+            header = null
         )
-
-    }
-    fun formatText(text: String): MdBlock.MdText {
-        var startPhrase = -1
-        var starCount = 0
-        var hhCount = 0
-
-        var i = 0
-
-        while (i < text.length) {
-            val c = text[i]
-            if (c == '*') {
-                starCount++
-            }
-        }
-    }
-    fun parseGroup(group: String): MdBlock.MdText {
-        val
     }
 
-    fun parseGroup1(group: String): MdBlock.MdText {
-        val start = group[0]
-        val startIsStar = start == '*'
-        var startCount = 0
-
-        var italic = false
-        var bold = false
-        var crossedOut = false
-
-        for (i in 0..2) {
-            if (group[i] == start) {
-                startCount++
-            } else {
-                break
-            }
-        }
-
-        var i = startCount
-        while (i < group.length) {
-            if (group[i] == start) {
-                var flag = true
-                for (j in 1..startCount) {
-                    i++
-                    if (group[i] != start) {
-                        flag = false
-                        break
-                    }
-                }
-                if (flag) {
-                    when (group[i].toString().repeat(startCount)) {
-                        "***" -> {
-                            italic = true
-                            bold = true
-                        }
-                        "**" -> bold = true
-                        "*" -> italic = true
-                        "~~" -> crossedOut = true
-                    }
-                    return MdBlock.MdText(group.substring(startCount - 1, i),
-                        italic, bold, crossedOut)
-                }
-            }
-        }
-    }
 
 
 //    fun parseHeader(line: String): MdBlock.MdText {
