@@ -117,8 +117,12 @@ class ParserMdImpl {
         return MdBlock.MdText(line.substring(i, line.length))
     }
 
-    fun parseText(text: String): List<MdBlock.MdText> {
-        return emptyList()
+    fun parseText(text: String): MdBlock.MdText {
+        var i = 0
+
+
+
+        return MdBlock.MdText("")
     }
 
     fun formatText(
