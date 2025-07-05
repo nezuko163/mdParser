@@ -9,6 +9,8 @@ class ParserMdImpl {
     }
 
     fun parseMd(text: String): List<MdBlock> {
+        val imageRegex = Regex("^!\\[[^\\]]*]\\(([^)]+)\\)")
+
         val blocks = mutableListOf<MdBlock>()
         val lines = text.lines()
 
@@ -29,6 +31,8 @@ class ParserMdImpl {
                     blocks.add(MdBlock.MdEmptyLine())
                 }
                 isPrevLineEmpty = true
+                i++
+                continue
             }
 
             // Заголовки
@@ -37,11 +41,14 @@ class ParserMdImpl {
 //            }
 
             // Изображение
-            val imageMatch = Regex("^!\\[.*?]\\((.*?)\\)").find(trimmed)
-            if (imageMatch != null) {
-                val url = imageMatch.groupValues[1]
-                blocks.add(MdBlock.MdImage(url))
-                continue
+            if (trimmed.length < 500) {
+                val imageMatch = imageRegex.find(trimmed)
+                if (imageMatch != null) {
+                    val url = imageMatch.groupValues[1]
+                    blocks.add(MdBlock.MdImage(url))
+                    i++
+                    continue
+                }
             }
 
             // Таблицы
@@ -51,13 +58,14 @@ class ParserMdImpl {
                     tableHeaders.clear()
                     tableRows.clear()
                     columns.forEach {
-                        tableHeaders.add(MdBlock.MdText(it))
+                        tableHeaders.add(parseText(it))
                     }
                     isInTable = true
                 } else {
-                    val row = columns.map { MdBlock.MdText(it) }
+                    val row = columns.map { parseText(it) }
                     tableRows.add(row)
                 }
+                i++
                 continue
             }
 
@@ -86,6 +94,7 @@ class ParserMdImpl {
 //                    )
 //                )
 //            }
+            i++
         }
 
         // Если таблица осталась незакрытой — добавим
@@ -240,6 +249,89 @@ class ParserMdImpl {
 }
 
 
+fun main() {
+    // Тестовая Markdown таблица с разными функциями
+    val testMd = """
+        | **Language** | *Rating* | ~~Experience~~ | Extras     |
+        |--------------|----------|----------------|------------|
+        | Kotlin       | 5        | 4 years        | Awesome!   |
+        | Java         | 4        | ~~10 years~~   | Legacy     |
+        | _Python_     | 5        | 6 years        | **Popular**|
+        | Rust         | ~~3~~    | 2 years        |            |
+    """.trimIndent()
 
+    val parser = ParserMdImpl()
+    val result = parser.parseMd(testMd)
+
+    println("=".repeat(50))
+    println("РАСПАРСЕННЫЕ БЛОКИ:")
+    println("=".repeat(50))
+
+    result.forEachIndexed { index, block ->
+        println("\nБлок #${index + 1}: ${block::class.simpleName}")
+
+        when (block) {
+            is MdBlock.MdTable -> {
+                println("\nТАБЛИЦА:")
+                println("-".repeat(50))
+
+                // Вывод заголовков
+                println("ЗАГОЛОВКИ:")
+                block.content.keys.forEach { header ->
+                    printHeader(header)
+                }
+
+                // Вывод данных
+                println("\nДАННЫЕ:")
+                val rows = transposeTable(block.content)
+                rows.forEachIndexed { rowIndex, row ->
+                    println("\nСтрока #${rowIndex + 1}:")
+                    row.forEach { cell ->
+                        printCell(cell)
+                    }
+                }
+            }
+            else -> println(block)
+        }
+    }
+}
+
+// Вспомогательные функции для красивого вывода
+fun printHeader(header: MdBlock.MdText) {
+    val styles = listOf(
+        "ЖИРНЫЙ" to header.boldIndexes.isNotEmpty(),
+        "КУРСИВ" to header.italicIndexes.isNotEmpty(),
+        "ЗАЧЕРК" to header.crossedOutIndexes.isNotEmpty()
+    ).filter { it.second }.map { it.first }
+
+    val styleInfo = if (styles.isNotEmpty()) " [${styles.joinToString()}]" else ""
+    println("  - ${header.text}$styleInfo")
+}
+
+fun printCell(cell: MdBlock.MdText) {
+    val styles = mutableListOf<String>()
+    if (cell.boldIndexes.isNotEmpty()) styles.add("ЖИРНЫЙ")
+    if (cell.italicIndexes.isNotEmpty()) styles.add("КУРСИВ")
+    if (cell.crossedOutIndexes.isNotEmpty()) styles.add("ЗАЧЕРК")
+
+    val styleInfo = if (styles.isNotEmpty()) " [${styles.joinToString()}]" else ""
+    println("  - ${cell.text}${styleInfo}")
+}
+
+// Транспонируем таблицу для удобного вывода по строкам
+fun transposeTable(table: Map<MdBlock.MdText, List<MdBlock.MdText>>): List<List<MdBlock.MdText>> {
+    val rows = mutableListOf<List<MdBlock.MdText>>()
+    val maxRows = table.values.maxOfOrNull { it.size } ?: 0
+
+    for (i in 0 until maxRows) {
+        val row = mutableListOf<MdBlock.MdText>()
+        table.values.forEach { column ->
+            row.add(column.getOrElse(i) { MdBlock.MdText("") })
+        }
+        rows.add(row)
+    }
+
+    return rows
+}
 
 
